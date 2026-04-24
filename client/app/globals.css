@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+}
+
+@layer components {
+  .term-highlight {
+    @apply bg-yellow-100 text-yellow-800 px-0.5 rounded cursor-pointer border-b-2 border-yellow-400 hover:bg-yellow-200 transition-colors font-medium;
+  }
+}
