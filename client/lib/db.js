@@ -1,4 +1,4 @@
-import mariadb from "mariadb";
+import * as mariadb from "mariadb";
 
 // Reuse pool across hot reloads in development
 const globalForMariadb = global;
@@ -9,6 +9,7 @@ if (!globalForMariadb._mariadbPool) {
     password: process.env.DB_PASSWORD || "1234",
     database: process.env.DB_NAME || "finword",
     connectionLimit: 5,
+    allowPublicKeyRetrieval: true,
   });
 }
 
@@ -19,7 +20,7 @@ function normalizeBigInts(value) {
   if (Array.isArray(value)) return value.map(normalizeBigInts);
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, normalizeBigInts(v)])
+      Object.entries(value).map(([k, v]) => [k, normalizeBigInts(v)]),
     );
   }
   return value;

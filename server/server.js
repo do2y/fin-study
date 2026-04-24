@@ -19,6 +19,7 @@ const pool = mariadb.createPool({
   password: process.env.DB_PASSWORD || "1234",
   database: process.env.DB_NAME || "finword",
   connectionLimit: 5,
+  allowPublicKeyRetrieval: true,
 });
 
 async function initializeSchema() {
@@ -58,16 +59,12 @@ async function initializeSchema() {
 function authenticateToken(req, res, next) {
   const token = (req.headers.authorization || "").split(" ")[1];
   if (!token) return res.status(401).json({ message: "로그인이 필요합니다." });
-  jwt.verify(
-    token,
-    process.env.JWT_SECRET || "finword_secret",
-    (err, user) => {
-      if (err)
-        return res.status(403).json({ message: "토큰이 유효하지 않습니다." });
-      req.user = user;
-      next();
-    }
-  );
+  jwt.verify(token, process.env.JWT_SECRET || "finword_secret", (err, user) => {
+    if (err)
+      return res.status(403).json({ message: "토큰이 유효하지 않습니다." });
+    req.user = user;
+    next();
+  });
 }
 
 function normalizeBigInts(value) {
@@ -75,7 +72,7 @@ function normalizeBigInts(value) {
   if (Array.isArray(value)) return value.map(normalizeBigInts);
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, normalizeBigInts(v)])
+      Object.entries(value).map(([k, v]) => [k, normalizeBigInts(v)]),
     );
   }
   return value;
@@ -96,7 +93,7 @@ app.post("/api/register", async (req, res) => {
     conn = await pool.getConnection();
     await conn.query(
       "INSERT INTO Users (email, password, name) VALUES (?, ?, ?)",
-      [email, hashed, name]
+      [email, hashed, name],
     );
     res.status(201).json({ message: "회원가입이 완료되었습니다." });
   } catch (err) {
@@ -129,7 +126,7 @@ app.post("/api/login", async (req, res) => {
     const token = jwt.sign(
       { id: Number(user.id), email: user.email },
       process.env.JWT_SECRET || "finword_secret",
-      { expiresIn: "24h" }
+      { expiresIn: "24h" },
     );
     res.json({ message: "로그인 성공", token, name: user.name });
   } catch (err) {
@@ -155,7 +152,8 @@ app.get("/api/news", (req, res) => {
 
 app.get("/api/news/:id", (req, res) => {
   const item = newsData.find((n) => n.id === Number(req.params.id));
-  if (!item) return res.status(404).json({ message: "뉴스를 찾을 수 없습니다." });
+  if (!item)
+    return res.status(404).json({ message: "뉴스를 찾을 수 없습니다." });
   res.json(item);
 });
 
@@ -163,7 +161,8 @@ app.get("/api/news/:id", (req, res) => {
 
 app.get("/api/terms/:word", (req, res) => {
   const term = termsData[req.params.word];
-  if (!term) return res.status(404).json({ message: "단어를 찾을 수 없습니다." });
+  if (!term)
+    return res.status(404).json({ message: "단어를 찾을 수 없습니다." });
   res.json(term);
 });
 
@@ -176,7 +175,7 @@ app.get("/api/vocabulary/check/:word", authenticateToken, async (req, res) => {
     conn = await pool.getConnection();
     const rows = await conn.query(
       "SELECT id FROM Vocabulary WHERE user_id = ? AND word = ?",
-      [req.user.id, req.params.word]
+      [req.user.id, req.params.word],
     );
     res.json({
       saved: rows.length > 0,
@@ -229,18 +228,21 @@ app.post("/api/vocabulary", authenticateToken, async (req, res) => {
     conn = await pool.getConnection();
     const existing = await conn.query(
       "SELECT id FROM Vocabulary WHERE user_id = ? AND word = ?",
-      [req.user.id, word]
+      [req.user.id, word],
     );
     if (existing.length > 0) {
-      return res.status(400).json({ message: "이미 단어장에 저장된 단어입니다." });
+      return res
+        .status(400)
+        .json({ message: "이미 단어장에 저장된 단어입니다." });
     }
     const result = await conn.query(
       "INSERT INTO Vocabulary (user_id, word, meaning, category, memo) VALUES (?, ?, ?, ?, ?)",
-      [req.user.id, word, meaning, category || "기타", memo || null]
+      [req.user.id, word, meaning, category || "기타", memo || null],
     );
-    res
-      .status(201)
-      .json({ message: "단어장에 저장되었습니다.", id: Number(result.insertId) });
+    res.status(201).json({
+      message: "단어장에 저장되었습니다.",
+      id: Number(result.insertId),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "저장 실패" });
@@ -257,7 +259,7 @@ app.put("/api/vocabulary/:id", authenticateToken, async (req, res) => {
     conn = await pool.getConnection();
     const rows = await conn.query(
       "SELECT * FROM Vocabulary WHERE id = ? AND user_id = ?",
-      [id, req.user.id]
+      [id, req.user.id],
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: "단어를 찾을 수 없습니다." });
@@ -272,12 +274,11 @@ app.put("/api/vocabulary/:id", authenticateToken, async (req, res) => {
         memo !== undefined ? memo : cur.memo,
         id,
         req.user.id,
-      ]
+      ],
     );
-    const updated = await conn.query(
-      "SELECT * FROM Vocabulary WHERE id = ?",
-      [id]
-    );
+    const updated = await conn.query("SELECT * FROM Vocabulary WHERE id = ?", [
+      id,
+    ]);
     res.json({
       message: "수정 완료",
       vocabulary: normalizeBigInts(updated[0]),
@@ -297,7 +298,7 @@ app.delete("/api/vocabulary/:id", authenticateToken, async (req, res) => {
     conn = await pool.getConnection();
     const result = await conn.query(
       "DELETE FROM Vocabulary WHERE id = ? AND user_id = ?",
-      [id, req.user.id]
+      [id, req.user.id],
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "삭제할 단어가 없습니다." });
@@ -316,7 +317,7 @@ const PORT = process.env.PORT || 3001;
 initializeSchema()
   .then(() => {
     app.listen(PORT, () =>
-      console.log(`FinWord server running on port ${PORT}`)
+      console.log(`FinWord server running on port ${PORT}`),
     );
   })
   .catch((err) => {

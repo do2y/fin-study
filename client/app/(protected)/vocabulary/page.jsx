@@ -25,12 +25,38 @@ export default function VocabularyPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, ...data }) =>
       api.put(`/api/vocabulary/${id}`, data).then((r) => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vocabulary"] }),
+    onMutate: async ({ id, ...changes }) => {
+      await queryClient.cancelQueries({ queryKey: ["vocabulary"] });
+      const previousAll = queryClient.getQueriesData({ queryKey: ["vocabulary"] });
+      queryClient.setQueriesData({ queryKey: ["vocabulary"] }, (old = []) =>
+        old.map((v) => (v.id === id ? { ...v, ...changes } : v))
+      );
+      return { previousAll };
+    },
+    onError: (_err, _vars, context) => {
+      context.previousAll.forEach(([key, data]) =>
+        queryClient.setQueryData(key, data)
+      );
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["vocabulary"] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/api/vocabulary/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vocabulary"] }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["vocabulary"] });
+      const previousAll = queryClient.getQueriesData({ queryKey: ["vocabulary"] });
+      queryClient.setQueriesData({ queryKey: ["vocabulary"] }, (old = []) =>
+        old.filter((v) => v.id !== id)
+      );
+      return { previousAll };
+    },
+    onError: (_err, _vars, context) => {
+      context.previousAll.forEach(([key, data]) =>
+        queryClient.setQueryData(key, data)
+      );
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["vocabulary"] }),
   });
 
   return (
